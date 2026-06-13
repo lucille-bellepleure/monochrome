@@ -19,7 +19,13 @@
         "lint": "bun run lint:js && bun run lint:css && bun run lint:html",
         "format": "prettier --write .",
         "lhci": "lhci",
-        "lhci:autorun": "npm run build && lhci autorun"
+        "lhci:autorun": "npm run build && lhci autorun",
+        "electron:rebuild": "electron-rebuild",
+        "electron:dev": "concurrently \"cross-env ELECTRON_IS_DEV=1 vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_IS_DEV=1 electron .\"",
+        "electron:build": "vite build && electron-builder",
+        "electron:build:win": "vite build && electron-builder --win",
+        "electron:build:mac": "vite build && electron-builder --mac",
+        "electron:build:linux": "vite build && electron-builder --linux"
     },
     "repository": {
         "type": "git",
@@ -37,6 +43,12 @@
     "devDependencies": {
         "@capacitor/assets": "^3.0.5",
         "@capacitor/cli": "^8.2.0",
+        "@electron/rebuild": "^3.7.0",
+        "concurrently": "^8.2.2",
+        "cross-env": "^7.0.3",
+        "electron": "^32.0.0",
+        "electron-builder": "^25.0.0",
+        "wait-on": "^7.2.0",
         "@lhci/cli": "^0.14.0",
         "@testing-library/dom": "^10.4.1",
         "@types/node": "^25.3.5",
@@ -100,6 +112,32 @@
         "typescript-eslint": "^8.57.2",
         "url-toolkit": "^2.2.5",
         "uuid": "^13.0.0",
-        "vitest": "^4.1.2"
+        "vitest": "^4.1.2",
+        "webtorrent": "^2.5.0"
+    },
+    "main": "electron/main.cjs",
+    "build": {
+        "appId": "tf.monochrome.desktop",
+        "productName": "Monochrome",
+        "directories": {
+            "output": "release"
+        },
+        "files": [
+            "dist/**/*",
+            "electron/**/*",
+            "assets/**/*",
+            "package.json"
+        ],
+        "mac": {
+            "category": "public.app-category.music",
+            "target": ["dmg", "zip"]
+        },
+        "win": {
+            "target": ["nsis", "portable"]
+        },
+        "linux": {
+            "target": ["AppImage", "deb"],
+            "category": "Audio"
+        }
     }
 }
