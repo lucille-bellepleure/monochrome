@@ -24,6 +24,7 @@ import { audioContextManager } from './audio-context.js';
 import { isIos, isSafari } from './platform-detection.js';
 import { db } from './db.js';
 import { getProxyUrl } from './proxy-utils.js';
+import { torrentAPI } from './torrent-api.ts';
 
 import { SVG_CLOCK, SVG_ATMOS, SVG_TRIANGLE_ALERT } from './icons.js';
 import { UIRenderer } from './ui.js';
@@ -583,81 +584,66 @@ export class Player {
             if (this.preloadCache.has(track.id)) continue;
             const isTracker = track.isTracker || (track.id && String(track.id).startsWith('tracker-'));
             const isPodcast = track.isPodcast || (track.id && String(track.id).startsWith('podcast_'));
-            if (track.isLocal || isTracker || isPodcast || (track.audioUrl && !track.isLocal)) continue;
-            try {
-                const streamInfo =
-                    track.type == 'video'
-                        ? await this.api.getVideoStreamUrl(track.id)
-                        : await this.api.getStreamUrl(track.id, this.quality);
-
-                if (this.preloadAbortController.signal.aborted) break;
-
-                this.preloadCache.set(track.id, streamInfo);
-                const streamUrl = streamInfo.url;
-
-                if (streamInfo.playbackType?.includes('cenc')) continue;
-
-                // Warm connection and pre-fetch
-                if (!streamUrl.startsWith('blob:')) {
-                    if (streamUrl.includes('.mpd') || streamUrl.includes('.m3u8')) {
-                        if (
-                            this.shakaInitialized &&
-                            this.shakaPlayer &&
-                            typeof this.shakaPlayer.preload === 'function'
-                        ) {
-                            try {
-                                let preloadConfig = undefined;
-                                if (typeof this.shakaPlayer.getConfiguration === 'function') {
-                                    preloadConfig = this.shakaPlayer.getConfiguration();
-                                    const stats =
-                                        typeof this.shakaPlayer.getStats === 'function'
-                                            ? this.shakaPlayer.getStats()
-                                            : null;
-                                    if (stats && stats.estimatedBandwidth) {
-                                        preloadConfig.abr.defaultBandwidthEstimate = stats.estimatedBandwidth;
-                                    }
-
-                                    // Lock the preload to the exact current audio codec to prevent ABR mismatch,
-                                    // which forces the player to discard and re-fetch chunks on slow connections.
-                                    preloadConfig.abr.enabled = false;
-                                    try {
-                                        const variants =
-                                            typeof this.shakaPlayer.getVariantTracks === 'function'
-                                                ? this.shakaPlayer.getVariantTracks()
-                                                : [];
-                                        const activeVariant = variants.find((v) => v.active);
-                                        if (activeVariant && activeVariant.audioCodec) {
-                                            preloadConfig.preferredAudioCodecs = [activeVariant.audioCodec];
-                                        }
-                                    } catch (_e) {}
+            // Force WebTorrent preloading for all non-local, non-tracker, non-podcast tracks
+            if (track.isLocal || isTracker || isPodcast) continue;
+            
+            // WebTorrent preloading (Album-first approach)
+            if (torrentAPI.isSupported()) {
+                try {
+                    console.log(`[Player] Preloading next track via WebTorrent: ${getTrackTitle(track)} - ${getTrackArtists(track)}`);
+                    // Search for the ALBUM first, like Popcorn Time
+                    const albumTitle = track.album?.title || '';
+                    const query = albumTitle ? `${albumTitle} ${getTrackArtists(track)}` : `${getTrackTitle(track)} ${getTrackArtists(track)}`;
+                    console.log(`[Player] Preload searching TPB for ALBUM: "${query}"`);
+                    const searchResults = await torrentAPI.searchTPB(query, 'audio');
+                    
+                    if (searchResults && searchResults.length > 0) {
+                        console.log(`[Player] Preload found ${searchResults.length} album torrent results. Sorting by seeders...`);
+                        searchResults.sort((a, b) => parseInt(b.seeders || 0) - parseInt(a.seeders || 0));
+                        const bestMatch = searchResults[0];
+                        console.log(`[Player] Preload selected top album torrent: "${bestMatch.name}" (Seeders: ${bestMatch.seeders})`);
+                        const magnetURI = `magnet:?xt=urn:btih:${bestMatch.info_hash}`;
+                        
+                        const torrentInfo = await torrentAPI.addTorrent(magnetURI);
+                        if (torrentInfo && torrentInfo.files && torrentInfo.files.length > 0) {
+                            console.log(`[Player] Preload album torrent added. Found ${torrentInfo.files.length} files.`);
+                            
+                            // Find the specific track file within the album torrent
+                            const targetTrackTitle = getTrackTitle(track).toLowerCase();
+                            console.log(`[Player] Preload looking for track file matching: "${targetTrackTitle}"`);
+                            
+                            const audioFile = torrentInfo.files.find(f => 
+                                f.name.toLowerCase().includes(targetTrackTitle) && f.name.match(/\.(mp3|flac|m4a|aac|ogg|wav)$/i)
+                            ) || torrentInfo.files.find(f => 
+                                f.name.match(/\.(mp3|flac|m4a|aac|ogg|wav)$/i)
+                            ) || torrentInfo.files[0];
+                            
+                            if (audioFile) {
+                                console.log(`[Player] Preload selected audio file: "${audioFile.name}"`);
+                                const url = await torrentAPI.selectFileForStreaming(torrentInfo.infoHash, audioFile.path);
+                                if (url) {
+                                    console.log(`[Player] Preload successful, cached stream URL for track ${track.id}`);
+                                    this.preloadCache.set(track.id, {
+                                        url: url,
+                                        provider: 'webtorrent',
+                                        playbackType: 'direct'
+                                    });
+                                } else {
+                                    console.warn(`[Player] Preload failed to get stream URL.`);
                                 }
-                                const preloadManager = await this.shakaPlayer.preload(
-                                    streamUrl,
-                                    null,
-                                    null,
-                                    preloadConfig
-                                );
-                                streamInfo.preloadManager = preloadManager;
-                            } catch (_e) {
-                                // Ignore preload errors, will just load fresh
+                            } else {
+                                console.warn(`[Player] Preload found no suitable audio file in album torrent.`);
                             }
                         } else {
-                            fetch(streamUrl, { method: 'GET', signal: this.preloadAbortController.signal }).catch(
-                                () => {}
-                            );
+                            console.warn(`[Player] Preload album torrent info or files missing.`);
                         }
                     } else {
-                        // For static files (FLAC, MP3), the audio element completely primes the cache.
-                        const preloader = new Audio();
-                        preloader.preload = 'auto';
-                        preloader.muted = true;
-                        preloader.src = getProxyUrl(streamUrl);
-                        streamInfo.preloader = preloader; // Hold reference
+                        console.warn(`[Player] Preload found no album torrent results for query.`);
                     }
-                }
-            } catch (error) {
-                if (error.name !== 'AbortError') {
-                    // console.debug('Failed to get stream URL for preload:', trackTitle);
+                } catch (error) {
+                    if (error.name !== 'AbortError') {
+                        console.error('[Player] WebTorrent preload failed:', error);
+                    }
                 }
             }
         }
@@ -1220,15 +1206,8 @@ export class Player {
                 }
                 const played = await this.safePlay(activeElement);
                 if (!played) return;
-            } else if (isTracker || (track.audioUrl && !track.isLocal)) {
-                streamUrl = track.audioUrl;
-
-                if (
-                    (!streamUrl || (typeof streamUrl === 'string' && streamUrl.startsWith('blob:'))) &&
-                    track.remoteUrl
-                ) {
-                    streamUrl = track.remoteUrl;
-                }
+            } else if (isTracker) {
+                streamUrl = track.audioUrl || track.remoteUrl;
 
                 if (!streamUrl) {
                     console.warn(`Track ${trackTitle} audio URL is missing. Skipping.`);
@@ -1237,7 +1216,7 @@ export class Player {
                     return;
                 }
 
-                if (isTracker && !streamUrl.startsWith('blob:') && streamUrl.startsWith('http')) {
+                if (!streamUrl.startsWith('blob:') && streamUrl.startsWith('http')) {
                     try {
                         const response = await fetch(streamUrl);
                         if (response.ok) {
@@ -1353,13 +1332,155 @@ export class Player {
                     return;
                 }
 
-                // Tidal: Try to get ReplayGain from manifest first, supplement with track info if needed
-                const streamInfoPromise = this.preloadCache.has(track.id)
-                    ? Promise.resolve(this.preloadCache.get(track.id))
-                    : this.api.getStreamUrl(track.id, this.quality);
+                // WebTorrent-only streaming logic (Album-first approach)
+                let resolvedStreamInfo = null;
+                let torrentFound = false;
 
-                // We only need the legacy track info if we missed getting ReplayGain from the manifest endpoint
-                const resolvedStreamInfo = await streamInfoPromise;
+                console.log(`[Player] 🎵 Starting WebTorrent streaming for: ${getTrackTitle(track)} - ${getTrackArtists(track)}`);
+                console.log(`[Player] 🖥️ Is Electron supported? ${torrentAPI.isSupported()}`);
+                
+                if (torrentAPI.isSupported()) {
+                    try {
+                        // Search for the ALBUM first, like Popcorn Time
+                        const albumTitle = track.album?.title || '';
+                        const query = albumTitle ? `${albumTitle} ${getTrackArtists(track)}` : `${getTrackTitle(track)} ${getTrackArtists(track)}`;
+                        console.log(`[Player] 🔍 Searching TPB for ALBUM: "${query}"`);
+                        const searchResults = await torrentAPI.searchTPB(query, 'audio');
+                        
+                        console.log(`[Player] 📊 TPB Search returned ${searchResults ? searchResults.length : 0} results.`);
+                        
+                        if (searchResults && searchResults.length > 0) {
+                            console.log(`[Player] 📈 Found ${searchResults.length} album torrent results. Sorting by seeders...`);
+                            // Sort by seeders descending
+                            searchResults.sort((a, b) => parseInt(b.seeders || 0) - parseInt(a.seeders || 0));
+                            
+                            // Try the top result
+                            const bestMatch = searchResults[0];
+                            console.log(`[Player] 🏆 Selected top album torrent: "${bestMatch.name}" (Seeders: ${bestMatch.seeders}, InfoHash: ${bestMatch.info_hash})`);
+                            const magnetURI = `magnet:?xt=urn:btih:${bestMatch.info_hash}`;
+                            console.log(`[Player] 🧲 Generated Magnet URI: ${magnetURI}`);
+                            
+                            console.log(`[Player] ⬇️ Adding album torrent to WebTorrent...`);
+                            const torrentInfo = await torrentAPI.addTorrent(magnetURI);
+                            
+                            if (torrentInfo && torrentInfo.files && torrentInfo.files.length > 0) {
+                                console.log(`[Player] ✅ Album torrent added successfully. Found ${torrentInfo.files.length} files.`);
+                                
+                                // Find the specific track file within the album torrent using word-based scoring
+                                const targetTrackTitle = getTrackTitle(track);
+                                console.log(`[Player] 🔎 Looking for track file matching: "${targetTrackTitle}"`);
+                                
+                                const normalize = (str) => str.toLowerCase().replace(/[^\w\s]/g, '').trim();
+                                const targetWords = normalize(targetTrackTitle).split(/\s+/).filter(w => w.length > 2);
+                                
+                                let bestMatch = null;
+                                let bestScore = 0;
+                                
+                                for (const f of torrentInfo.files) {
+                                    if (!f.name.match(/\.(mp3|flac|m4a|aac|ogg|wav)$/i)) continue;
+                                    
+                                    const fileNameWords = normalize(f.name).split(/\s+/);
+                                    let score = 0;
+                                    for (const word of targetWords) {
+                                        if (fileNameWords.some(fw => fw.includes(word))) {
+                                            score++;
+                                        }
+                                    }
+                                    
+                                    if (score > bestScore) {
+                                        bestScore = score;
+                                        bestMatch = f;
+                                    }
+                                }
+                                
+                                const audioFile = bestMatch || torrentInfo.files.find(f => f.name.match(/\.(mp3|flac|m4a|aac|ogg|wav)$/i)) || torrentInfo.files[0];
+                                
+                                 if (audioFile) {
+                                     console.log(`[Player] 🎧 Selected audio file for streaming: "${audioFile.name}" (${(audioFile.length / 1024 / 1024).toFixed(2)} MB)`);
+                                     console.log(`[Player] 🔗 Requesting stream URL for file...`);
+                                     const url = await torrentAPI.selectFileForStreaming(torrentInfo.infoHash, audioFile.path);
+                                     
+                                     if (url) {
+                                         console.log(`[Player] 🌐 Successfully obtained stream URL: ${url}`);
+                                         
+                                          // Wait for buffering before playing
+                                          console.log(`[Player] ⏳ Waiting for WebTorrent to buffer...`);
+                                          let buffered = false;
+                                          const startTime = Date.now();
+                                          const maxWaitTime = 30000; // 30 seconds timeout
+                                          let zeroPeersStartTime = null;
+                                          
+                                          while (Date.now() - startTime < maxWaitTime) {
+                                              const stats = await torrentAPI.getStats(torrentInfo.infoHash);
+                                              if (stats) {
+                                                  const progressPercent = (stats.progress * 100).toFixed(2);
+                                                  const speedKBs = (stats.downloadSpeed / 1024).toFixed(2);
+                                                  console.log(`[Player] 📊 WebTorrent buffering: ${progressPercent}% | Peers: ${stats.numPeers} | Speed: ${speedKBs} KB/s | Downloaded: ${(stats.downloaded / 1024 / 1024).toFixed(2)} MB`);
+                                                  
+                                                  // Check if we have at least 2% progress or 2MB downloaded
+                                                  if (stats.progress >= 0.02 || stats.downloaded >= 2 * 1024 * 1024) {
+                                                      console.log(`[Player] ✅ WebTorrent buffering complete. Ready to play.`);
+                                                      buffered = true;
+                                                      break;
+                                                  }
+
+                                                  // Graceful fallback: if 0 peers for > 10 seconds, abort early
+                                                  if (stats.numPeers === 0) {
+                                                      if (!zeroPeersStartTime) {
+                                                          zeroPeersStartTime = Date.now();
+                                                      } else if (Date.now() - zeroPeersStartTime > 10000) {
+                                                          console.warn(`[Player] ⚠️ No peers found for 10 seconds. Torrent may be unseeded. Aborting.`);
+                                                          break;
+                                                      }
+                                                  } else {
+                                                      zeroPeersStartTime = null; // Reset if we get peers
+                                                  }
+                                              } else {
+                                                  console.log(`[Player] ⚠️ WebTorrent stats returned null.`);
+                                              }
+                                              await new Promise(resolve => setTimeout(resolve, 500)); // Poll every 500ms
+                                          }
+                                         
+                                         if (buffered) {
+                                             resolvedStreamInfo = {
+                                                 url: url,
+                                                 provider: 'webtorrent',
+                                                 playbackType: 'direct'
+                                             };
+                                             torrentFound = true;
+                                          } else {
+                                              if (zeroPeersStartTime && Date.now() - zeroPeersStartTime > 10000) {
+                                                  console.warn(`[Player] ⚠️ No peers found for this torrent. The file may be unseeded or trackers are blocked.`);
+                                              } else {
+                                                  console.warn(`[Player] ⏱️ WebTorrent buffering timed out after 30 seconds.`);
+                                              }
+                                          }
+                                     } else {
+                                         console.warn(`[Player] ❌ Failed to get stream URL for file.`);
+                                     }
+                                 } else {
+                                     console.warn(`[Player] ❌ No suitable audio file found in album torrent.`);
+                                 }
+                             } else {
+                                 console.warn(`[Player] ❌ Album torrent info or files missing. torrentInfo:`, torrentInfo);
+                             }
+                         } else {
+                             console.warn(`[Player] ❌ No album torrent results found for query: "${query}"`);
+                         }
+                     } catch (error) {
+                         console.error('[Player] ❌ WebTorrent streaming failed:', error);
+                     }
+                 } else {
+                     console.warn('[Player] ❌ WebTorrent is not supported in this environment. (Not running in Electron?)');
+                 }
+
+                if (!torrentFound) {
+                    console.warn(`[Player] Track "${trackTitle}" could not be streamed via WebTorrent. Skipping.`);
+                    track.isUnavailable = true;
+                    // await this.playNext(); // Disabled for debugging
+                    return;
+                }
+
                 if (this.playbackSequence !== currentSequence) return;
 
                 streamUrl = resolvedStreamInfo.url;

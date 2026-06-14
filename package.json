@@ -25,7 +25,10 @@
         "electron:build": "vite build && electron-builder",
         "electron:build:win": "vite build && electron-builder --win",
         "electron:build:mac": "vite build && electron-builder --mac",
-        "electron:build:linux": "vite build && electron-builder --linux"
+        "electron:build:linux": "vite build && electron-builder --linux",
+        "capacitor:sync": "vite build && npx cap sync",
+        "capacitor:open:android": "npx cap open android",
+        "capacitor:build:android": "vite build && npx cap sync android && cd android && ./gradlew assembleRelease"
     },
     "repository": {
         "type": "git",

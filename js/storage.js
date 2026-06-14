@@ -3060,9 +3060,9 @@ export const musicProviderSettings = {
 
     getProvider() {
         try {
-            return localStorage.getItem(this.STORAGE_KEY) || 'amazon';
+            return localStorage.getItem(this.STORAGE_KEY) || 'torrent';
         } catch {
-            return 'amazon';
+            return 'torrent';
         }
     },
 

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebTorrent Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #111; color: #0f0; }
+        #log { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>WebTorrent Browser Test</h1>
+    <div id="log">Initializing...</div>
+
+    <script>
+        const log = document.getElementById('log');
+        function print(msg) {
+            log.textContent += msg + '\n';
+            console.log(msg);
+        }
+
+        const client = new WebTorrent();
+        const magnetURI = 'magnet:?xt=urn:btih:6f29e90e3209c5e11aa197d98e4908257bbdfd91&dn=U2%20-%20The%20Joshua%20Tree%20(Super%20Deluxe)%202017';
+
+        const trackers = [
+            'wss://tracker.openwebtorrent.com',
+            'wss://tracker.btorrent.xyz',
+            'udp://tracker.opentrackr.org:1337/announce',
+            'udp://tracker.openbittorrent.com:6969/announce',
+            'udp://open.stealth.si:80/announce',
+            'udp://tracker.torrent.eu.org:451/announce',
+            'udp://exodus.desync.com:6969/announce'
+        ];
+
+        print('🧲 Adding torrent...');
+        print(`Magnet: ${magnetURI}`);
+
+        client.add(magnetURI, { announce: trackers }, (torrent) => {
+            print('✅ Torrent added!');
+            print(`Info Hash: ${torrent.infoHash}`);
+            
+            torrent.on('metadata', () => {
+                print('📄 Metadata received!');
+                print(`Name: ${torrent.name}`);
+                print(`Total Size: ${(torrent.length / 1024 / 1024).toFixed(2)} MB`);
+                print(`Files: ${torrent.files.length}`);
+            });
+
+            torrent.on('download', () => {
+                print(`⬇️  Downloading: ${(torrent.progress * 100).toFixed(1)}% | ` +
+                      `Speed: ${(torrent.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s | ` +
+                      `Peers: ${torrent.numPeers}`);
+            });
+
+            torrent.on('done', () => {
+                print('🎉 Download complete!');
+                // List files and create download links
+                torrent.files.forEach((file, i) => {
+                    print(`File ${i}: ${file.name} (${(file.length / 1024 / 1024).toFixed(2)} MB)`);
+                    file.getBlobURL((err, url) => {
+                        if (err) {
+                            print(`❌ Error getting URL for ${file.name}: ${err.message}`);
+                        } else {
+                            print(`✅ Ready to play/download: ${file.name}`);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = file.name;
+                            a.textContent = `Download ${file.name}`;
+                            a.style.display = 'block';
+                            a.style.color = '#0ff';
+                            a.style.margin = '10px 0';
+                            document.body.appendChild(a);
+                        }
+                    });
+                });
+            });
+
+            torrent.on('error', (err) => {
+                print('❌ Torrent error: ' + err.message);
+            });
+        });
+
+        client.on('error', (err) => {
+            print('❌ Client error: ' + err.message);
+        });
+
+        // Timeout after 60 seconds
+        setTimeout(() => {
+            if (client.torrents.length > 0 && !client.torrents[0].done) {
+                print('⏱️  Test timed out after 60 seconds.');
+                print(`Current progress: ${(client.torrents[0].progress * 100).toFixed(1)}%`);
+                print(`Current peers: ${client.torrents[0].numPeers}`);
+            }
+        }, 60000);
+    </script>
+</body>
+</html>
