@@ -123,6 +123,7 @@
     "build": {
         "appId": "tf.monochrome.desktop",
         "productName": "Monochrome",
+        "icon": "assets/icon-foreground.png",
         "directories": {
             "output": "release"
         },

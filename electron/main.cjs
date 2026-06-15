@@ -27,12 +27,13 @@ function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
+        autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.cjs'),
         },
-        icon: path.join(__dirname, '../assets/icon-only.png'),
+        icon: path.join(__dirname, '../assets/icon-foreground.png'),
     });
 
     // Load the app
