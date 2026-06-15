@@ -139,7 +139,13 @@
             "target": ["dmg", "zip"]
         },
         "win": {
-            "target": ["nsis", "portable"]
+            "target": ["nsis", "portable"],
+            "extraFiles": [
+                {
+                    "from": "build/win/ffmpeg.dll",
+                    "to": "."
+                }
+            ]
         },
         "linux": {
             "target": ["AppImage", "deb"],
