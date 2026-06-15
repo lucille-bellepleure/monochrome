@@ -123,7 +123,7 @@
     "build": {
         "appId": "tf.monochrome.desktop",
         "productName": "Monochrome",
-        "icon": "assets/icon-foreground.png",
+        "icon": "assets/icon-512.png",
         "directories": {
             "output": "release"
         },
@@ -131,6 +131,7 @@
             "dist/**/*",
             "electron/**/*",
             "assets/**/*",
+            "build/**/*",
             "package.json"
         ],
         "mac": {
