@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const http = require('http');
+const { searchTorrents } = require('./torrent-proxy.cjs');
 
 // Avoid GPU process crashes ("GPU process isn't usable. Goodbye.") on
 // systems where Chromium's GPU sandbox fails (common on Linux/Wayland).
@@ -505,5 +506,17 @@ ipcMain.handle('torrent:destroy', async (event, infoHash) => {
     const torrent = await client.get(cleanInfoHash);
     if (torrent && torrent.infoHash) {
         torrent.destroy();
+    }
+});
+
+ipcMain.handle('torrent:search', async (event, query) => {
+    try {
+        console.log(`[Electron Main] 🔍 Searching torrents for: "${query}"`);
+        const results = await searchTorrents(query);
+        console.log(`[Electron Main] ✅ Found ${results.length} torrent results`);
+        return results;
+    } catch (err) {
+        console.error(`[Electron Main] ❌ Torrent search error:`, err.message);
+        return [];
     }
 });

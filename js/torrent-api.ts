@@ -130,50 +130,34 @@ export class TorrentAPI {
      */
      async searchTPB(query: string, category: string = 'audio'): Promise<any[]> {
          console.log(`[TorrentAPI] 🔍 searchTPB called with query: "${query}", category: "${category}"`);
-         try {
-              // Using custom torrents API to avoid CORS issues
-              const url = `https://monochrome-torrents-api.fly.dev/search?q=${encodeURIComponent(query)}`;
-             console.log(`[TorrentAPI] 🌐 Fetching from URL: ${url}`);
-             const response = await fetch(url);
-            console.log(`[TorrentAPI] 📡 Response status: ${response.status} ${response.statusText}`);
-            if (!response.ok) {
-                throw new Error(`TPB API error: ${response.status}`);
-            }
-            const data = await response.json();
-            console.log(`[TorrentAPI] 📦 Raw API response received, type:`, typeof data, Array.isArray(data) ? 'Array' : 'Object');
-            console.log(`[TorrentAPI] 📦 Raw data sample:`, JSON.stringify(data).substring(0, 500));
-            
-            // Handle different response formats (array or object with nested array)
-            const results = Array.isArray(data) ? data : (data.results || data.data || data.torrents || []);
-            
-            if (!Array.isArray(results)) {
-                console.warn('[TorrentAPI] ⚠️ Unexpected TPB API response format:', data);
-                return [];
-            }
-
-            // Normalize the response to match the expected format (name, info_hash)
-            const normalizedResults = results.map((item: any) => {
-                const infoHashMatch = item.magnet ? item.magnet.match(/btih:([a-zA-Z0-9]+)/i) : null;
-                const infoHash = infoHashMatch ? infoHashMatch[1] : (item.info_hash || '');
-                
-                return {
-                    ...item,
-                    name: item.title || item.name,
-                    info_hash: infoHash
-                };
-            });
-
-            const filtered = normalizedResults.filter((item: any) => item.info_hash && item.info_hash !== '0000000000000000000000000000000000000000');
-            console.log(`[TorrentAPI] ✅ searchTPB returning ${filtered.length} results`);
-            if (filtered.length > 0) {
-                console.log(`[TorrentAPI] 🏆 Top result:`, filtered[0]);
-            }
-            return filtered;
-        } catch (error) {
-            console.error('[TorrentAPI] ❌ Failed to search TPB:', error);
-            return [];
-        }
-    }
+         if (this.isElectron) {
+             try {
+                 const results = await (window as any).electronAPI.searchTorrents(query);
+                 // Normalize to match expected format (name, info_hash, seeders)
+                 const normalizedResults = results.map((item: any) => {
+                     const infoHashMatch = item.magnet ? item.magnet.match(/btih:([a-zA-Z0-9]+)/i) : null;
+                     const infoHash = infoHashMatch ? infoHashMatch[1] : '';
+                     return {
+                         ...item,
+                         name: item.title || item.name,
+                         info_hash: infoHash,
+                         seeders: item.seeders || 0
+                     };
+                 });
+                 console.log(`[TorrentAPI] ✅ searchTPB returning ${normalizedResults.length} results via Electron`);
+                 if (normalizedResults.length > 0) {
+                     console.log(`[TorrentAPI] 🏆 Top result:`, normalizedResults[0]);
+                 }
+                 return normalizedResults;
+             } catch (error) {
+                 console.error('[TorrentAPI] ❌ Failed to search torrents via Electron:', error);
+                 return [];
+             }
+         } else {
+             console.warn('[TorrentAPI] Torrent search is only supported in Electron.');
+             return [];
+         }
+     }
 
     /**
      * Get TPB category code
