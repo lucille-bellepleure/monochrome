@@ -729,14 +729,14 @@ export class UIRenderer {
             href: `/folder/${folder.id}`,
             title: escapeHtml(folder.name),
             subtitle: `${folder.playlists ? folder.playlists.length : 0} playlists`,
-            imageHTML: `<img src="${imageSrc}" alt="${escapeHtml(folder.name)}" class="card-image" loading="lazy" onerror="this.src='/assets/folder.png'">`,
+            imageHTML: `<img src="${imageSrc}" alt="${escapeHtml(folder.name)}" class="card-image" loading="lazy" onerror="this.src='./assets/folder.png'">`,
             actionButtonsHTML: '',
             isCompact,
         });
     }
 
     createMixCardHTML(mix) {
-        const imageSrc = mix.cover || '/assets/appicon.png';
+        const imageSrc = mix.cover || './assets/appicon.png';
         const description = mix.subTitle || mix.description || '';
         const isCompact = cardSettings.isCompactAlbum();
 
@@ -796,7 +796,7 @@ export class UIRenderer {
             } else if (uniqueCovers.length > 0) {
                 imageHTML = `<img src="${this.api.getCoverUrl(uniqueCovers[0])}" alt="${playlist.name}" class="card-image" loading="lazy">`;
             } else {
-                imageHTML = `<img src="/assets/appicon.png" alt="${playlist.name}" class="card-image" loading="lazy">`;
+                imageHTML = `<img src="./assets/appicon.png" alt="${playlist.name}" class="card-image" loading="lazy">`;
             }
         }
 
@@ -5149,7 +5149,7 @@ export class UIRenderer {
                             collageEl.appendChild(img);
                         });
                     } else {
-                        imageEl.src = '/assets/appicon.png';
+                        imageEl.src = './assets/appicon.png';
                         imageEl.style.display = 'block';
                         if (collageEl) collageEl.style.display = 'none';
                     }
@@ -5299,7 +5299,7 @@ export class UIRenderer {
 
                     await this.extractAndApplyColor(this.api.getCoverUrl(imageId, '160'));
                 } else {
-                    imageEl.src = '/assets/appicon.png';
+                    imageEl.src = './assets/appicon.png';
                     this.setPageBackground(null);
                     this.resetVibrantColor();
                 }
@@ -5395,9 +5395,9 @@ export class UIRenderer {
             const folder = await db.getFolder(folderId);
             if (!folder) throw new Error('Folder not found');
 
-            imageEl.src = folder.cover || '/assets/folder.png';
+            imageEl.src = folder.cover || './assets/folder.png';
             imageEl.onerror = () => {
-                imageEl.src = '/assets/folder.png';
+                imageEl.src = './assets/folder.png';
             };
             imageEl.style.backgroundColor = '';
 
@@ -5543,7 +5543,7 @@ export class UIRenderer {
                     this.setPageBackground(coverUrl);
                     await this.extractAndApplyColor(this.api.getCoverUrl(tracks[0].album.cover, '160'));
                 } else {
-                    imageEl.src = '/assets/appicon.png';
+                    imageEl.src = './assets/appicon.png';
                     this.setPageBackground(null);
                     this.resetVibrantColor();
                 }

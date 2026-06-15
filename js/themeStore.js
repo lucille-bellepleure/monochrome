@@ -330,7 +330,7 @@ export class ThemeStore {
 
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = '/styles.css';
+        link.href = './styles.css';
         this.detailsPreviewShadow.appendChild(link);
 
         const styleTag = document.createElement('style');
@@ -769,7 +769,7 @@ export class ThemeStore {
 
             const link = document.createElement('link');
             link.rel = 'stylesheet';
-            link.href = '/styles.css';
+            link.href = './styles.css';
             this.previewShadow.appendChild(link);
 
             this.previewStyleTag = document.createElement('style');

@@ -2989,7 +2989,7 @@ export const fontSettings = {
             link = document.createElement('link');
             link.id = APPLE_FONT_LINK_ID;
             link.rel = 'stylesheet';
-            link.href = '/fonts/apple/sf-pro-display.css';
+            link.href = './fonts/apple/sf-pro-display.css';
             document.head.appendChild(link);
         }
 

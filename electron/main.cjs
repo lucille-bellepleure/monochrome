@@ -36,11 +36,13 @@ function createWindow() {
     });
 
     // Load the app
-    if (process.env.NODE_ENV === 'development' || process.env.ELECTRON_IS_DEV) {
+    const isDev = process.env.NODE_ENV === 'development' || process.env.ELECTRON_IS_DEV;
+    if (isDev) {
         mainWindow.loadURL('http://localhost:5173');
         mainWindow.webContents.openDevTools();
     } else {
-        mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+        // Use app.getAppPath() for reliable path resolution in packaged Electron apps
+        mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
     }
 
     mainWindow.on('closed', () => {
