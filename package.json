@@ -21,6 +21,7 @@
         "lhci": "lhci",
         "lhci:autorun": "npm run build && lhci autorun",
         "electron:rebuild": "electron-rebuild",
+        "postinstall": "electron-builder install-app-deps",
         "electron:dev": "concurrently \"cross-env ELECTRON_IS_DEV=1 vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_IS_DEV=1 electron .\"",
         "electron:build": "vite build && electron-builder",
         "electron:build:win": "vite build && electron-builder --win",
@@ -37,7 +38,7 @@
     "keywords": [
         "music"
     ],
-    "author": "",
+    "author": "Monochrome <monochrome@tf>",
     "license": "Apache-2.0",
     "bugs": {
         "url": "https://github.com/monochrome-music/monochrome/issues"
@@ -140,7 +141,8 @@
         },
         "linux": {
             "target": ["AppImage", "deb"],
-            "category": "Audio"
+            "category": "Audio",
+            "maintainer": "Monochrome <monochrome@tf>"
         }
     }
 }

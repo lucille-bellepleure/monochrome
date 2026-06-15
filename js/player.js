@@ -146,16 +146,6 @@ export class Player {
                     useSourceElements: false,
                 },
             });
-            this.shakaPlayer.getNetworkingEngine().registerRequestFilter((type, request) => {
-                if (type === shaka.net.NetworkingEngine.RequestType.SEGMENT) {
-                    const uris = request.uris;
-                    for (let i = 0; i < uris.length; i++) {
-                        if (uris[i].includes('tidal.com')) {
-                            uris[i] = getProxyUrl(uris[i]);
-                        }
-                    }
-                }
-            });
             this.shakaPlayer.addEventListener('adaptation', this.updateAdaptiveQualityBadge.bind(this));
             this.shakaPlayer.addEventListener('variantchanged', this.updateAdaptiveQualityBadge.bind(this));
 
@@ -709,16 +699,6 @@ export class Player {
             this.backfillReplayGainFromTrack(track, currentSequence);
         }
 
-        const deezerHiResFallback =
-            streamInfo.provider === 'deezer' &&
-            (streamInfo.deezerHiRes || deriveTrackQuality(track) === 'HI_RES_LOSSLESS');
-        track.deezerHiResFallback = deezerHiResFallback;
-        if (this.currentTrack?.id === track.id) {
-            this.currentTrack.deezerHiResFallback = deezerHiResFallback;
-        }
-        if (deezerHiResFallback) {
-            this.updateNowPlayingTitle(track);
-        }
 
         const retryImmediateHandoff = async (error) => {
             if (this.playbackSequence !== currentSequence || this.currentTrack?.id !== track.id) {
@@ -1474,36 +1454,16 @@ export class Player {
                      console.warn('[Player] ❌ WebTorrent is not supported in this environment. (Not running in Electron?)');
                  }
 
-                if (!torrentFound) {
-                    console.warn(`[Player] Track "${trackTitle}" could not be streamed via WebTorrent. Skipping.`);
-                    track.isUnavailable = true;
-                    // await this.playNext(); // Disabled for debugging
-                    return;
-                }
+                 if (!torrentFound) {
+                     console.warn(`[Player] Track "${trackTitle}" could not be streamed via WebTorrent. Skipping.`);
+                     track.isUnavailable = true;
+                     await this.playNext();
+                     return;
+                 }
 
                 if (this.playbackSequence !== currentSequence) return;
 
                 streamUrl = resolvedStreamInfo.url;
-                if (resolvedStreamInfo.provider === 'amazon' && resolvedStreamInfo.quality) {
-                    track.amazonMusicQualitySelected = resolvedStreamInfo.quality;
-                    track.amazonMusicQualityDisplay = resolvedStreamInfo.qualityDisplay;
-                    if (this.currentTrack?.id === track.id) {
-                        this.currentTrack.amazonMusicQualitySelected = resolvedStreamInfo.quality;
-                        this.currentTrack.amazonMusicQualityDisplay = resolvedStreamInfo.qualityDisplay;
-                    }
-                    this.updateNowPlayingTitle(track);
-                }
-
-                const deezerHiResFallback =
-                    resolvedStreamInfo.provider === 'deezer' &&
-                    (resolvedStreamInfo.deezerHiRes || deriveTrackQuality(track) === 'HI_RES_LOSSLESS');
-                track.deezerHiResFallback = deezerHiResFallback;
-                if (this.currentTrack?.id === track.id) {
-                    this.currentTrack.deezerHiResFallback = deezerHiResFallback;
-                }
-                if (deezerHiResFallback) {
-                    this.updateNowPlayingTitle(track);
-                }
 
                 if (resolvedStreamInfo.rgInfo) {
                     this.currentRgValues = resolvedStreamInfo.rgInfo;
@@ -2357,10 +2317,7 @@ export class Player {
         if (!track) return;
         const titleEl = document.querySelector('.now-playing-bar .title');
         if (!titleEl) return;
-        const warning = track.deezerHiResFallback
-            ? `<span class="deezer-hires-warning" role="img" tabindex="0" aria-label="Hi-Res unavailable for this track. Playing in CD-quality lossless instead. That's 16-bit / 44.1 kHz FLAC.">${SVG_TRIANGLE_ALERT(16)}</span>`
-            : '';
-        titleEl.innerHTML = `${escapeHtml(getTrackTitle(track))} ${createQualityBadgeHTML(track)}${warning}`;
+        titleEl.innerHTML = `${escapeHtml(getTrackTitle(track))} ${createQualityBadgeHTML(track)}`;
     }
 
     updateAdaptiveQualityBadge() {
@@ -2371,10 +2328,6 @@ export class Player {
             if (!titleEl) return;
 
             let badgeEl = titleEl.querySelector('.shaka-quality-badge');
-            if (this.currentTrack.amazonMusicQualitySelected) {
-                if (badgeEl) badgeEl.style.display = 'none';
-                return;
-            }
 
             // Determine if the track is inherently an Atmos track based on metadata
             const trackBaseQuality = deriveTrackQuality(this.currentTrack);
