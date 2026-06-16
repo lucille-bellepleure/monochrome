@@ -151,6 +151,10 @@
             "target": ["AppImage", "deb"],
             "category": "Audio",
             "maintainer": "Monochrome <monochrome@tf>"
+        },
+        "publish": {
+            "provider": "github",
+            "releaseType": "release"
         }
     }
 }
