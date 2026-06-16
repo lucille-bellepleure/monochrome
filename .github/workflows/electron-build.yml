@@ -10,6 +10,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 permissions:
   contents: write
@@ -45,7 +46,7 @@ jobs:
 
       - name: Install Python setuptools (for node-gyp on macOS)
         if: matrix.os == 'macos-latest'
-        run: pip3 install setuptools
+        run: pip3 install --break-system-packages setuptools
 
       - name: Install dependencies
         run: bun install
