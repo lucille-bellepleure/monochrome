@@ -1,7 +1,7 @@
 {
     "name": "monochrome",
     "type": "module",
-    "version": "2.5.1",
+    "version": "2.5.2",
     "description": "[<img src=\"https://github.com/monochrome-music/monochrome/blob/main/assets/512.png?raw=true\" alt=\"Monochrome Logo\">](https://monochrome.tf)",
     "scripts": {
         "dev": "vite",
@@ -136,10 +136,16 @@
         ],
         "mac": {
             "category": "public.app-category.music",
-            "target": ["dmg", "zip"]
+            "target": [
+                "dmg",
+                "zip"
+            ]
         },
         "win": {
-            "target": ["nsis", "portable"],
+            "target": [
+                "nsis",
+                "portable"
+            ],
             "extraFiles": [
                 {
                     "from": "build/win/ffmpeg.dll",
@@ -148,7 +154,10 @@
             ]
         },
         "linux": {
-            "target": ["AppImage", "deb"],
+            "target": [
+                "AppImage",
+                "deb"
+            ],
             "category": "Audio",
             "maintainer": "Monochrome <monochrome@tf>"
         },
