@@ -50,6 +50,10 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: pip3 install --break-system-packages setuptools
 
+      - name: Setup MSVC Build Tools (for node-gyp on Windows)
+        if: matrix.os == 'windows-latest'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Install dependencies
         run: bun install
 
