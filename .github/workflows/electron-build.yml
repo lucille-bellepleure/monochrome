@@ -30,6 +30,10 @@ jobs:
             platform: linux
             build_cmd: electron:build:linux
             artifact_name: linux-build
+          - os: windows-latest
+            platform: win
+            build_cmd: electron:build:win
+            artifact_name: windows-build
 
     steps:
       - name: Checkout code
